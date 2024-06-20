@@ -1,11 +1,80 @@
 import { ChevronDownIcon, ChevronRightIcon, FileIcon, FolderIcon, FolderOpenIcon } from "lucide-react";
-// API CALL TO USE
 import { readINode } from "./api/read-inode";
+import { useEffect, useState } from "react";
+import { INode } from "./types/file-types";
 
 export function FileTreeViewer() {
-  // Here is your API call to use
-  // It returns a promise containing the directory based on the directory ID
-  console.log(readINode());
+  const [rootNode, setRootNode] = useState<INode | null>(null);
+  const [nodes, setNodes] = useState<Map<string, INode>>(new Map());
+  const [openNodes, setOpenNodes] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    const fetchData = async () => {
+      const rootData = await readINode("root");
+      setRootNode(rootData);
+      setNodes(new Map([["root", rootData]]));
+      setOpenNodes(new Set(["root"]));
+    };
+    fetchData();
+  }, []);
+
+  const fetchNode = async (id: string) => {
+    if (!nodes.has(id)) {
+      const data = await readINode(id);
+      setNodes((prev) => new Map(prev).set(id, data));
+      return data;
+    }
+    return nodes.get(id) as INode;
+  };
+
+  const toggleNode = (id: string) => {
+    setOpenNodes((prev) => {
+      const newOpenNodes = new Set(prev);
+      if (newOpenNodes.has(id)) {
+        newOpenNodes.delete(id);
+      } else {
+        newOpenNodes.add(id);
+      }
+      return newOpenNodes;
+    });
+  };
+
+  const renderNode = (node: INode) => {
+    if (node.type === "file") {
+      return (
+        <div key={node.id} className="flex items-center">
+          <FileIcon className="h-5 w-5" />
+          {node.name}
+        </div>
+      );
+    }
+
+    if (node.type === "directory") {
+      const isOpen = openNodes.has(node.id);
+      return (
+        <div key={node.id}>
+          <div className="flex items-center gap-2 cursor-pointer" onClick={() => toggleNode(node.id)}>
+            {isOpen ? <ChevronDownIcon className="h-5 w-5" /> : <ChevronRightIcon className="h-5 w-5" />}
+            {isOpen ? <FolderOpenIcon className="h-5 w-5" /> : <FolderIcon className="h-5 w-5" />}
+            <div>{node.name}</div>
+          </div>
+          {isOpen && (
+            <div className="pl-10">
+              {node.children?.map((childId) => {
+                const childNode = nodes.get(childId);
+                if (!childNode) {
+                  fetchNode(childId);
+                  return <div key={childId}>Loading...</div>;
+                }
+                return renderNode(childNode);
+              })}
+            </div>
+          )}
+        </div>
+      );
+    }
+  };
+
   return (
     <div className="bg-white rounded p-6 space-y-6">
       <div className="grid">
@@ -46,6 +115,7 @@ export function FileTreeViewer() {
         </code>{" "}
         file and start building.
       </p>
+      <div>{rootNode && renderNode(rootNode)}</div>
     </div>
   );
 }
